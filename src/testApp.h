@@ -23,4 +23,6 @@ class testApp : public ofBaseApp{
 	LineDrawer drawer;
 	ofEasyCam cam;
 	ofVec2f prevPosition;
+	
+	vector<float> velocities;
 };

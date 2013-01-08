@@ -223,7 +223,7 @@ public:
 				if(j == drawings[i].smoothPoints.size()-1) {
 					ofVec2f circleDirection = currentPoint - prevPoint;
 circleDirection.normalize();
-					ofLine(prevPoint, prevPoint+circleDirection*(currentValue*0.5f));
+				
 					
 					fillHalfCircle(currentPoint, circleDirection, color, currentValue*0.5f, lineMesh);
 					
