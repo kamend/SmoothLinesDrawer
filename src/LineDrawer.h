@@ -45,7 +45,7 @@ public:
 				
 				int segDistance = 2;
 				float distance = midPoint1.distance(midPoint2);
-				int numberOfSegments = MIN(128, MAX(floorf(distance / segDistance),32));
+				int numberOfSegments = MIN(128, MAX(floorf(distance / segDistance),64));
 
 				
 				float t = 0.0f;
@@ -71,6 +71,8 @@ public:
 				
 				
 			}
+
+			points.erase(points.begin(), points.begin()+1);
 		}
 		
 	}
@@ -80,16 +82,66 @@ class LineDrawer {
 public:
 	vector<Line> drawings;
 	bool bUseSmoothLines;
-	
-	
-	
+	ofFbo drawFbo;
+
 	ofMesh lines;
-	
 	int currentLine;
+	bool updateCanvas;
+	
+	bool lineBegin;
+	bool lineEnd;
+
+
 	
 	LineDrawer() {
 		bUseSmoothLines = false;
-		lines.setMode(OF_PRIMITIVE_TRIANGLES);
+
+		updateCanvas = false;
+	}
+	
+	void initCanvas(float width, float height) {
+		drawFbo.allocate(width, height, GL_RGBA32F);
+		clearCanvas();
+	}
+	
+	void clearCanvas() {
+		drawFbo.begin();
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		ofBackground(0, 0, 0,0);
+		drawFbo.end();
+	}
+	
+	void beginLine() {
+		lineBegin = true;
+		lineEnd = false;
+	}
+	
+	void addToLine(ofVec2f _point, float _width, ofColor c) {
+		LinePoints lp;
+		lp.point = _point;
+		lp.width = _width;
+		lp.c = c;
+		
+		drawings[currentLine].points.push_back(lp);
+		updateCanvas = true;
+
+	}
+	
+	void update() {
+
+		if(updateCanvas) {
+			
+			glEnable(GL_BLEND);
+			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+			drawFbo.begin();
+			drawSmoothLine(currentLine);
+			drawFbo.end();
+			glDisable(GL_BLEND);
+			updateCanvas = false;
+		}
+
+	
 	}
 	
 	void createLine(ofVec2f spos) {
@@ -97,22 +149,10 @@ public:
 		Line l;
 		drawings.push_back(l);
 	}
-	
-	void addLine(ofVec2f _point, float _width, ofColor c) {
-		
-		LinePoints lp;
-		lp.point = _point;
-		lp.width = _width;
-		lp.c = c;
-		
-		drawings[currentLine].points.push_back(lp);
-	}
-	
+
 	void closeLine() {
-	//	ofLog() << "Created Line with: " << drawings[currentLine].points.size() << " points!";
-		currentLine = -1;
+		lineEnd = true;
 	}
-	
 
 	void addTriangle(ofVec2f a, ofVec2f b, ofVec2f c, float z, ofColor c1, ofColor c2, ofColor c3, ofMesh &m) {
 		ofVec3f p1,p2,p3;
@@ -132,16 +172,23 @@ public:
 		m.addColor(c2);
 		m.addColor(c3);
 		
+		m.addTexCoord(p1);
+		m.addTexCoord(p2);
+		m.addTexCoord(p3);
+		
 	}
 	
 	
 	void drawSmoothLine(int i) {
 		
+		// calculate smooth points
+		
+		if(drawings[i].smoothPoints.size() == 0 || i == currentLine) {
+			drawings[i].calcSmooth();
+		}
+
 		ofMesh lineMesh;
 		lineMesh.setMode(OF_PRIMITIVE_TRIANGLES);
-		
-		if(drawings[i].smoothPoints.size() == 0 || i == currentLine)
-			drawings[i].calcSmooth();
 		
 		if(drawings[i].smoothPoints.size() != 0) {		
 			ofVec2f prevPoint = drawings[i].smoothPoints[0].point;
@@ -174,26 +221,22 @@ public:
 				float alpha = ofMap(currentValue, 1,20,50,155);
 				ofColor color = drawings[i].smoothPoints[j].c;
 	
-				
 				if(j > 1) {
 					pA = prevC;
 					pB = prevD;
 				} else if(j == 1) {
 					// add circle
-					ofVec2f circleDirection = prevPoint - currentPoint;
-					fillHalfCircle(prevPoint, circleDirection, color, prevValue*0.5f, lineMesh);
+					if(lineBegin) {
+						ofVec2f circleDirection = prevPoint - currentPoint;
+						fillHalfCircle(prevPoint, circleDirection, color, prevValue*0.5f, lineMesh);
+						lineBegin = false;
+					}
 				}
-				
-				
-
-				
+	
 				addTriangle(pA, pB, pC, 0.0f, color, color, color, lineMesh);
 				addTriangle(pB, pC, pD, 0.0f, color, color, color, lineMesh);
-				
-				
-				
+
 				// anti-alias
-				
 				float overdraw = 3.0;
 				ofColor fadeColor = color;
 				fadeColor.a = 0;
@@ -213,24 +256,19 @@ public:
 				addTriangle(pB, pH, pD, 0.0f, color, fadeColor, color, lineMesh);
 				addTriangle(pH, pD, pI, 0.0f, fadeColor, color, fadeColor, lineMesh);
 
-				
-				
 				// line starts
 				
 				// line ends
 				// draw half circle
 				
-				if(j == drawings[i].smoothPoints.size()-1) {
+				if(lineEnd && j == drawings[i].smoothPoints.size()-1) {
+	
 					ofVec2f circleDirection = currentPoint - prevPoint;
 circleDirection.normalize();
-				
-					
 					fillHalfCircle(currentPoint, circleDirection, color, currentValue*0.5f, lineMesh);
-					
-					
+					lineEnd = false;
 				}
-				
-				
+
 				prevG = pG;
 				prevI = pI;
 				
@@ -242,17 +280,16 @@ circleDirection.normalize();
 			}
 
 		}
-		
-		
+
 		lineMesh.drawFaces();
+
+
 	}
 	
 	void drawAll() {
-
 		for(int i=0;i<drawings.size();i++) {
 			drawSmoothLine(i);
-
-		}	
+		}
 	}
 	
 	
@@ -287,7 +324,7 @@ circleDirection.normalize();
 			fadeColor.a = 0;
 			
 			// anti-aliasing
-			float overdraw = 2.0;
+			float overdraw = 3.0;
 			
 			m.addVertex(prevPoint + prevDir*overdraw);
 			m.addVertex(prevPoint);

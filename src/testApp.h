@@ -2,6 +2,8 @@
 
 #include "ofMain.h"
 #include "LineDrawer.h"
+#include "ofxNamedColors.h"
+
 
 class testApp : public ofBaseApp{
 
@@ -25,4 +27,13 @@ class testApp : public ofBaseApp{
 	ofVec2f prevPosition;
 	
 	vector<float> velocities;
+	
+	ofFbo test;
+	
+	ofColor drawColor;
+	
+	bool addNewLine;
+	bool addLastPoints;
+	ofVec2f newLinePos;
+	float newLineSize;
 };
